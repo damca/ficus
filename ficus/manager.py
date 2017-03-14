@@ -4,11 +4,21 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import sys
 
+def move_figure(fig):
+    '''
+    Move and resize a window to a set of standard positions on the screen.
+    '''
+    mgr = fig.canvas.manager
+    x, y, w, h = mgr.window.geometry().getRect()
+    d = 30
+    mgr.window.setGeometry(d, d+50, w+d, h+d)  # 30 in from left, 80 down from top
+
 class FigureManager(object):
 
     def __init__(self, filename=None, show=False, dpi=300,
                  nrows=1, ncols=1, tight_layout_rect=None,
-                 figsize=None, gridspec_kw={}, subplot_kw={}):
+                 figsize=None, gridspec_kw={}, subplot_kw={},
+                 move=True):
         """Context manager for Matplotlib Figures.
 
         Parameters
@@ -27,11 +37,11 @@ class FigureManager(object):
             None will grab rcParams default
         gridspec_kw : dict
             {'left': 0.15, 'right': ...}
-        subplot_kw : dict
+        subplot_kw : dict or 'all'
             {1 : {'sharex': 0, 'sharey': 0}, ..., }
             Keys are axis numbers (from left to right, top to bottom). Values
-            are dicts specifying share axes. Higher ax numbers must share with
-            lower ax numbers.
+            are dicts specifying share axes. Higher ax numbers must share with lower ax numbers.
+            If 'all', then all subplots will share axes.
 
             Integers are replaced with axes.
 
@@ -44,9 +54,14 @@ class FigureManager(object):
             figsize = plt.rcParams['figure.figsize']
         cur_max = max(plt.get_fignums() or [0]) + 1
         self.fig = plt.figure(cur_max, figsize=figsize)
-        print("Making Figure {}".format(cur_max))
         self.gs = GridSpec(nrows, ncols, **gridspec_kw)
         self.ax = []
+        if subplot_kw == 'all':
+            share = {'sharex': 0, 'sharey': 0}
+            sbkw = {}
+            for ix in range(1, nrows*ncols):
+                sbkw[ix] = share.copy()
+            subplot_kw = sbkw
         for ix, sp in enumerate(self.gs):
             if ix in subplot_kw:
                 sub_kws = subplot_kw[ix]
@@ -64,6 +79,7 @@ class FigureManager(object):
         self.dpi = dpi
         self.filename = filename
         self.show = show
+        self.move = move
 
         if self.fig != plt.gcf():
             self.clear()
@@ -75,9 +91,11 @@ class FigureManager(object):
     def __exit__(self, exc_type, exc_value, traceback):
         if not exc_type:
             if self.filename is not None:
+                print('Saving {}'.format(self.filename))
                 self.fig.savefig(self.filename, dpi=self.dpi)
 
             if self.show:
+                if self.move: move_figure(self.fig)
                 plt.show(self.fig.number)
             self.clear()
         else:
